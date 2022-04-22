@@ -1,0 +1,264 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>解决RT无法接受后处理的问题 | Gridea</title>
+<link rel="shortcut icon" href="https://https://github.com/jiachenwei123/RenderingLearning.git/favicon.ico?v=1650604113840">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://https://github.com/jiachenwei123/RenderingLearning.git/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="解决RT无法接受后处理的问题 | Gridea - Atom Feed" href="https://https://github.com/jiachenwei123/RenderingLearning.git/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="问题原因：
+PostProcessing 会修改RT的Alhpa通道，使其变成不透明的。
+解决思路：
+得到正确的Alhpa值来修正。
+解决方法：
+新建一个与原先一模一样的相机，修改关闭后处理，并将其渲染到另一张RT上(FixRT),在sha..." />
+    <meta name="keywords" content="" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="https://cdn.bootcss.com/highlight.js/9.12.0/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://https://github.com/jiachenwei123/RenderingLearning.git">
+  <img class="avatar" src="https://https://github.com/jiachenwei123/RenderingLearning.git/images/avatar.png?v=1650604113840" alt="">
+  </a>
+  <h1 class="site-title">
+    Gridea
+  </h1>
+  <p class="site-description">
+    温故而知新
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              解决RT无法接受后处理的问题
+            </h2>
+            <div class="post-info">
+              <span>
+                2022-04-22
+              </span>
+              <span>
+                2 min read
+              </span>
+              
+            </div>
+            
+            <div class="post-content-wrapper">
+              <div class="post-content">
+                <p>问题原因：<br>
+PostProcessing 会修改RT的Alhpa通道，使其变成不透明的。</p>
+<p>解决思路：<br>
+得到正确的Alhpa值来修正。</p>
+<p>解决方法：<br>
+新建一个与原先一模一样的相机，修改关闭后处理，并将其渲染到另一张RT上(FixRT),在shader中传入原先的OriRT(经过后处理)和FixRT(未经过后处理)，分别采样两张RT，输出OriRT的rgb通道和FixRT的a通道，注意需要开启透明度混合，而且SolidColor要调整成纯黑色。</p>
+<p>以下是shader代码</p>
+<pre><code>Shader &quot;Unlit/fixShader&quot;
+{
+    Properties
+    {
+        _BaseMap(&quot;MainTex&quot;, 2D) = &quot;White&quot; {}
+        _MaskMap(&quot;Mask&quot;, 2D) = &quot;White&quot;{}
+    }
+
+    SubShader
+    {
+    // URP的shader要在Tags中注明渲染管线是UniversalPipeline
+    Tags
+    {
+        &quot;RanderPipline&quot; = &quot;UniversalPipeline&quot;
+        &quot;RanderType&quot; = &quot;Transparent&quot;
+    }
+    
+    Blend One OneMinusSrcAlpha
+
+    HLSLINCLUDE
+
+        // 引入Core.hlsl头文件，替换UnityCG中的cginc
+        #include &quot;Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl&quot;
+
+        // 将不占空间的材质相关变量放在CBUFFER中，为了兼容SRP Batcher
+        CBUFFER_START(UnityPerMaterial)
+            float4 _BaseMap_ST;
+            float4 _MaskMap_ST;
+        CBUFFER_END
+
+    
+
+        // 材质单独声明，使用DX11风格的新采样方法
+        TEXTURE2D (_BaseMap);
+        SAMPLER(sampler_BaseMap);
+
+        TEXTURE2D (_MaskMap);
+        SAMPLER(sampler_MaskMap);
+
+        struct Attributes
+        {
+            float4 positionOS : POSITION;
+            float2 uv         : TEXCOORD0;
+        };
+
+        struct Varyings
+        {
+            float4 positionCS : SV_POSITION;
+            float2 uv         : TEXCOORD0;
+        };
+
+    ENDHLSL
+
+    Pass
+    {
+        // 声明Pass名称，方便调用与识别
+        Name &quot;ForwardUnlit&quot;
+        Tags {&quot;LightMode&quot; = &quot;UniversalForward&quot;}
+
+        HLSLPROGRAM
+
+            // 声明顶点/片段着色器对应的函数
+            #pragma vertex vert
+            #pragma fragment frag
+
+            // 顶点着色器
+            Varyings vert(Attributes input)
+            {
+                // GetVertexPositionInputs方法根据使用情况自动生成各个坐标系下的定点信息
+                const VertexPositionInputs vertexInput = GetVertexPositionInputs(input.positionOS.xyz);
+
+                Varyings output;
+                output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
+                output.positionCS = vertexInput.positionCS;
+                return output;
+            }
+
+            // 片段着色器
+            half4 frag(Varyings input) : SV_Target
+            {
+                return half4(SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv).rgb,SAMPLE_TEXTURE2D(_MaskMap, sampler_MaskMap, input.uv).a);
+            }
+        
+        ENDHLSL
+    }
+ }
+}
+</code></pre>
+
+              </div>
+              <div class="toc-container">
+                
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://https://github.com/jiachenwei123/RenderingLearning.git/post/hello-gridea/">
+              <h3 class="post-title">
+                Hello Gridea
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://https://github.com/jiachenwei123/RenderingLearning.git/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

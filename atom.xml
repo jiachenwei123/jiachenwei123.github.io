@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+    <id>https://https://github.com/jiachenwei123/RenderingLearning.git</id>
+    <title>Gridea</title>
+    <updated>2022-04-22T05:08:35.649Z</updated>
+    <generator>https://github.com/jpmonette/feed</generator>
+    <link rel="alternate" href="https://https://github.com/jiachenwei123/RenderingLearning.git"/>
+    <link rel="self" href="https://https://github.com/jiachenwei123/RenderingLearning.git/atom.xml"/>
+    <subtitle>温故而知新</subtitle>
+    <logo>https://https://github.com/jiachenwei123/RenderingLearning.git/images/avatar.png</logo>
+    <icon>https://https://github.com/jiachenwei123/RenderingLearning.git/favicon.ico</icon>
+    <rights>All rights reserved 2022, Gridea</rights>
+    <entry>
+        <title type="html"><![CDATA[解决RT无法接受后处理的问题]]></title>
+        <id>https://https://github.com/jiachenwei123/RenderingLearning.git/post/jie-jue-rt-wu-fa-jie-shou-hou-chu-li-de-wen-ti/</id>
+        <link href="https://https://github.com/jiachenwei123/RenderingLearning.git/post/jie-jue-rt-wu-fa-jie-shou-hou-chu-li-de-wen-ti/">
+        </link>
+        <updated>2022-04-22T02:52:18.000Z</updated>
+        <content type="html"><![CDATA[<p>问题原因：<br>
+PostProcessing 会修改RT的Alhpa通道，使其变成不透明的。</p>
+<p>解决思路：<br>
+得到正确的Alhpa值来修正。</p>
+<p>解决方法：<br>
+新建一个与原先一模一样的相机，修改关闭后处理，并将其渲染到另一张RT上(FixRT),在shader中传入原先的OriRT(经过后处理)和FixRT(未经过后处理)，分别采样两张RT，输出OriRT的rgb通道和FixRT的a通道，注意需要开启透明度混合，而且SolidColor要调整成纯黑色。</p>
+<p>以下是shader代码</p>
+<pre><code>Shader &quot;Unlit/fixShader&quot;
+{
+    Properties
+    {
+        _BaseMap(&quot;MainTex&quot;, 2D) = &quot;White&quot; {}
+        _MaskMap(&quot;Mask&quot;, 2D) = &quot;White&quot;{}
+    }
+
+    SubShader
+    {
+    // URP的shader要在Tags中注明渲染管线是UniversalPipeline
+    Tags
+    {
+        &quot;RanderPipline&quot; = &quot;UniversalPipeline&quot;
+        &quot;RanderType&quot; = &quot;Transparent&quot;
+    }
+    
+    Blend One OneMinusSrcAlpha
+
+    HLSLINCLUDE
+
+        // 引入Core.hlsl头文件，替换UnityCG中的cginc
+        #include &quot;Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl&quot;
+
+        // 将不占空间的材质相关变量放在CBUFFER中，为了兼容SRP Batcher
+        CBUFFER_START(UnityPerMaterial)
+            float4 _BaseMap_ST;
+            float4 _MaskMap_ST;
+        CBUFFER_END
+
+    
+
+        // 材质单独声明，使用DX11风格的新采样方法
+        TEXTURE2D (_BaseMap);
+        SAMPLER(sampler_BaseMap);
+
+        TEXTURE2D (_MaskMap);
+        SAMPLER(sampler_MaskMap);
+
+        struct Attributes
+        {
+            float4 positionOS : POSITION;
+            float2 uv         : TEXCOORD0;
+        };
+
+        struct Varyings
+        {
+            float4 positionCS : SV_POSITION;
+            float2 uv         : TEXCOORD0;
+        };
+
+    ENDHLSL
+
+    Pass
+    {
+        // 声明Pass名称，方便调用与识别
+        Name &quot;ForwardUnlit&quot;
+        Tags {&quot;LightMode&quot; = &quot;UniversalForward&quot;}
+
+        HLSLPROGRAM
+
+            // 声明顶点/片段着色器对应的函数
+            #pragma vertex vert
+            #pragma fragment frag
+
+            // 顶点着色器
+            Varyings vert(Attributes input)
+            {
+                // GetVertexPositionInputs方法根据使用情况自动生成各个坐标系下的定点信息
+                const VertexPositionInputs vertexInput = GetVertexPositionInputs(input.positionOS.xyz);
+
+                Varyings output;
+                output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
+                output.positionCS = vertexInput.positionCS;
+                return output;
+            }
+
+            // 片段着色器
+            half4 frag(Varyings input) : SV_Target
+            {
+                return half4(SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv).rgb,SAMPLE_TEXTURE2D(_MaskMap, sampler_MaskMap, input.uv).a);
+            }
+        
+        ENDHLSL
+    }
+ }
+}
+</code></pre>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Hello Gridea]]></title>
+        <id>https://https://github.com/jiachenwei123/RenderingLearning.git/post/hello-gridea/</id>
+        <link href="https://https://github.com/jiachenwei123/RenderingLearning.git/post/hello-gridea/">
+        </link>
+        <updated>2018-12-11T16:00:00.000Z</updated>
+        <summary type="html"><![CDATA[<p>👏  欢迎使用 <strong>Gridea</strong> ！<br>
+✍️  <strong>Gridea</strong> 一个静态博客写作客户端。你可以用它来记录你的生活、心情、知识、笔记、创意... ...</p>
+]]></summary>
+        <content type="html"><![CDATA[<p>👏  欢迎使用 <strong>Gridea</strong> ！<br>
+✍️  <strong>Gridea</strong> 一个静态博客写作客户端。你可以用它来记录你的生活、心情、知识、笔记、创意... ...</p>
+<!-- more -->
+<p><a href="https://github.com/getgridea/gridea">Github</a><br>
+<a href="https://gridea.dev/">Gridea 主页</a><br>
+<a href="http://fehey.com/">示例网站</a></p>
+<h2 id="特性">特性👇</h2>
+<p>📝  你可以使用最酷的 <strong>Markdown</strong> 语法，进行快速创作</p>
+<p>🌉  你可以给文章配上精美的封面图和在文章任意位置插入图片</p>
+<p>🏷️  你可以对文章进行标签分组</p>
+<p>📋  你可以自定义菜单，甚至可以创建外部链接菜单</p>
+<p>💻  你可以在 <strong>Windows</strong>，<strong>MacOS</strong> 或 <strong>Linux</strong> 设备上使用此客户端</p>
+<p>🌎  你可以使用 <strong>𝖦𝗂𝗍𝗁𝗎𝖻 𝖯𝖺𝗀𝖾𝗌</strong> 或 <strong>Coding Pages</strong> 向世界展示，未来将支持更多平台</p>
+<p>💬  你可以进行简单的配置，接入 <a href="https://github.com/gitalk/gitalk">Gitalk</a> 或 <a href="https://github.com/SukkaW/DisqusJS">DisqusJS</a> 评论系统</p>
+<p>🇬🇧  你可以使用<strong>中文简体</strong>或<strong>英语</strong></p>
+<p>🌁  你可以任意使用应用内默认主题或任意第三方主题，强大的主题自定义能力</p>
+<p>🖥  你可以自定义源文件夹，利用 OneDrive、百度网盘、iCloud、Dropbox 等进行多设备同步</p>
+<p>🌱 当然 <strong>Gridea</strong> 还很年轻，有很多不足，但请相信，它会不停向前 🏃</p>
+<p>未来，它一定会成为你离不开的伙伴</p>
+<p>尽情发挥你的才华吧！</p>
+<p>😘 Enjoy~</p>
+]]></content>
+    </entry>
+</feed>
